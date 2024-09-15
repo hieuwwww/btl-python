@@ -8,23 +8,34 @@ import math
 pygame.init()
 
 # Cài đặt màn hình
-WIDTH, HEIGHT = 1600, 1200
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+MAP_WIDTH, MAP_HEIGHT = 1600, 1200
+SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Sneakerdoodle Game")
-
-# Màu sắc
-WHITE = (255, 255, 255)
 
 # Khoảng cách ngưỡng để kích hoạt mục tiêu
 trigger_distance = 100
+
+# Màu sắc
+WHITE = (255, 255, 255)
 
 # Hàm tính khoảng cách
 def distance(pos1, pos2):
     return math.sqrt((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2)
 
+# Hàm cập nhật camera
+def update_camera(player_rect):
+    camera_x = player_rect.centerx - SCREEN_WIDTH // 2
+    camera_y = player_rect.centery - SCREEN_HEIGHT // 2
+    
+    camera_x = max(0, min(camera_x, MAP_WIDTH - SCREEN_WIDTH))
+    camera_y = max(0, min(camera_y, MAP_HEIGHT - SCREEN_HEIGHT))
+    
+    return camera_x, camera_y
+
 # Tải hình ảnh tạm thời
 background_img = pygame.image.load('assets/background.png')
-background_img = pygame.transform.scale(background_img, (WIDTH, HEIGHT))
+background_img = pygame.transform.scale(background_img, (MAP_WIDTH, MAP_HEIGHT))
 dog_img = pygame.image.load('assets/dog.png')
 dog_img = pygame.transform.scale(dog_img, (50, 50))
 target_img = pygame.image.load('assets/target.png')
@@ -38,16 +49,17 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
         self.image = dog_img
         self.rect = self.image.get_rect()
-        self.rect.center = (WIDTH // 2, HEIGHT // 2)
+        self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         self.speed = 5
         self.sprint_speed = 8
-        self.is_active = False
+       
 
-    def move(self, keys):
+    def move(self, keys, obstacles):
         if keys[pygame.K_LSHIFT]:  # Nhấn shift để chạy
             speed = self.sprint_speed
         else:
             speed = self.speed
+        old_position = self.rect.topleft
         if keys[pygame.K_LEFT]:
             self.rect.x -= speed
         if keys[pygame.K_RIGHT]:
@@ -56,9 +68,14 @@ class Player(pygame.sprite.Sprite):
             self.rect.y -= speed
         if keys[pygame.K_DOWN]:
             self.rect.y += speed
-    def check_distance(self, player):
-        target_pos = (self.rect.x, self.rect.y)
-        dis = distance()
+        if (self.collide_with_obstacles(obstacles)):
+            self.rect.topleft = old_position
+    
+    def collide_with_obstacles(self, obstacles): # Va chạm vật thể
+        if pygame.sprite.spritecollideany(self, obstacles):
+            return True
+        return False
+
 
 # Lớp đối tượng Target (mục tiêu đuổi theo)
 class Target(pygame.sprite.Sprite):
@@ -68,16 +85,25 @@ class Target(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
         self.speed = 2.5  # Mục tiêu di chuyển chậm hơn người chơi
-
+        self.is_active = False
     def update(self, player):
-        if self.rect.x < player.rect.x:
-            self.rect.x += self.speed
-        if self.rect.x > player.rect.x:
-            self.rect.x -= self.speed
-        if self.rect.y < player.rect.y:
-            self.rect.y += self.speed
-        if self.rect.y > player.rect.y:
-            self.rect.y -= self.speed
+        self.check_distance(player)
+        if self.is_active == True:
+            if self.rect.x < player.rect.x:
+                self.rect.x += self.speed
+            if self.rect.x > player.rect.x:
+                self.rect.x -= self.speed
+            if self.rect.y < player.rect.y:
+                self.rect.y += self.speed
+            if self.rect.y > player.rect.y:
+                self.rect.y -= self.speed
+    def check_distance(self, player):
+        target_pos = (self.rect.x, self.rect.y)
+        player_pos = (player.rect.x, player.rect.y)
+        dis = distance(target_pos, player_pos)
+        if dis <= trigger_distance:
+            self.is_active = True
+
 
 # Lớp Obstacle (chướng ngại vật)
 class Obstacle(pygame.sprite.Sprite):
@@ -116,7 +142,7 @@ def run_game(level_file):
         keys = pygame.key.get_pressed()
 
         # Di chuyển player
-        player.move(keys)
+        player.move(keys, obstacles)
 
         # Cập nhật vị trí mục tiêu
         targets.update(player)
