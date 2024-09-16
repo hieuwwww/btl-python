@@ -93,61 +93,70 @@ class Target(pygame.sprite.Sprite):
         self.image = target_img
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
-        self.speed = 2.5  # Mục tiêu di chuyển chậm hơn người chơi
+        self.speed = 1.5  # Mục tiêu di chuyển chậm hơn người chơi
         self.is_active = False
-        self.direction = pygame.Vector2(1, 0)  # Hướng nhìn ban đầu (hướng sang phải)
-        self.last_activation_time = None
+        self.direction = pygame.Vector2(random.uniform(-1, 1), random.uniform(-1, 1))  # Hướng nhìn ban đầu (random)
+        # self.last_activation_time = None
 
-    def update(self, player, obstacles):
+    def update(self, player, obstacles, camera_offset):
         self.check_cone_of_vision(player)
+        self.draw_vision_cone(player, camera_offset)
         # Nếu target đã được kích hoạt, delay 0.5 giây trước khi đuổi
-        if self.is_active and self.last_activation_time and (time.time() - self.last_activation_time) >= activation_delay:
+        if self.is_active :
             self.move_towards_player(player, obstacles)        
 
     def check_cone_of_vision(self, player):
-        # Kiểm tra nếu player nằm trong hình nón
+        # Tính toán vector từ target đến player
         player_vector = pygame.Vector2(player.rect.center) - pygame.Vector2(self.rect.center)
         player_distance = player_vector.length()
-        player_direction = player_vector.normalize()
 
-        # Tính góc giữa hướng target và player
-        angle = self.direction.angle_to(player_direction)
+        if player_distance <= trigger_distance:
+            # Tính toán góc giữa hướng target và hướng tới player
+            player_direction = player_vector.normalize()
+            angle = self.direction.angle_to(player_direction)
 
-        # Nếu player nằm trong hình nón 45 độ và trong bán kính trigger_distance, kích hoạt target
-        if abs(angle) <= 22.5 and player_distance <= trigger_distance:
-            self.is_active = True
-            self.last_activation_time = time.time()
+            # Nếu player nằm trong hình nón của target (dựa trên góc cone_angle)
+            if abs(angle) <= cone_angle / 2:
+                self.is_active = True
 
     def move_towards_player(self, player, obstacles):
         # Di chuyển mục tiêu theo hướng người chơi
         old_position = self.rect.topleft
-        
-        if self.rect.x < player.rect.x:
-            self.rect.x += self.speed
-            self.direction = pygame.Vector2(1, 0)
-        if self.rect.x > player.rect.x:
-            self.rect.x -= self.speed
-            self.direction = pygame.Vector2(-1, 0)
-        if self.rect.y < player.rect.y:
-            self.rect.y += self.speed
-            self.direction = pygame.Vector2(0, 1)
-        if self.rect.y > player.rect.y:
-            self.rect.y -= self.speed
-            self.direction = pygame.Vector2(0, -1)
+        #Tính vector hướng tới player
+        direction_vector = pygame.Vector2(player.rect.center) - pygame.Vector2(self.rect.center)
+        if (direction_vector.length() != 0):
+            direction_vector = direction_vector.normalize()
+
+        #Cập nhật vị trí
+        self.rect.x += direction_vector.x * self.speed
+        self.rect.y += direction_vector.y * self.speed
+
+        #Cập nhật hướng
+        self.direction = direction_vector
+
+        #Kiểm tra va chạm với vật thể
         if (collide_with_obstacles(self, obstacles)):
             self.rect.topleft = old_position
 
-    def draw_vision_cone(self, camera_offset):
-    # Tạo surface tạm thời với alpha để vẽ hình nón
+    def draw_vision_cone(self, player, camera_offset):
+        # Tạo surface tạm thời với alpha để vẽ hình nón
         s = pygame.Surface((MAP_WIDTH, MAP_HEIGHT), pygame.SRCALPHA)
 
-        # Tạo danh sách các điểm cho hình nón
-        points = [self.rect.center - camera_offset]  # Điểm bắt đầu tại vị trí target
-        angle_step = cone_angle / num_segments  # Chia nhỏ hình nón thành các đoạn
+        # Điểm bắt đầu tại vị trí target
+        points = [self.rect.center - camera_offset]
+        angle_step = cone_angle / num_segments
         cone_distance = trigger_distance
 
-        # Tính toán góc bắt đầu và kết thúc của hình nón
-        start_angle = self.direction.angle_to(pygame.Vector2(1, 0)) - cone_angle / 2
+        # Sử dụng cùng hướng với hàm check_cone_of_vision
+        if self.is_active:
+            direction_vector = pygame.Vector2(player.rect.center) - pygame.Vector2(self.rect.center)
+            if direction_vector.length() > 0:
+                direction_vector = direction_vector.normalize()
+            start_angle = math.degrees(math.atan2(direction_vector.y, direction_vector.x)) - cone_angle / 2
+        else:
+            start_angle = math.degrees(math.atan2(self.direction.y, self.direction.x)) - cone_angle / 2
+
+        # Tạo các điểm cho hình nón dựa trên góc và khoảng cách
         for i in range(num_segments + 1):
             angle = math.radians(start_angle + i * angle_step)
             x = self.rect.centerx + math.cos(angle) * cone_distance
@@ -156,10 +165,9 @@ class Target(pygame.sprite.Sprite):
 
         # Vẽ hình nón bằng màu xanh lam mờ
         pygame.draw.polygon(s, BLUE, points)
-        
+
         # Vẽ lên màn hình chính
         screen.blit(s, (0, 0))
-
 
 def collide_with_obstacles(sprites, obstacles): # Va chạm vật thể
         if pygame.sprite.spritecollideany(sprites, obstacles):
@@ -205,15 +213,13 @@ def run_game(level_file):
     while running:
         # Vẽ tất cả các đối tượng
         camera.custom_draw(player, all_sprites)
-        for target in targets:
-            target.draw_vision_cone(camera.offset)
         keys = pygame.key.get_pressed()
 
         # Di chuyển player
         player.move(keys, obstacles)
 
         # Cập nhật vị trí mục tiêu
-        targets.update(player, obstacles)
+        targets.update(player, obstacles, camera.offset)
 
         # Kiểm tra nếu người chơi va chạm mục tiêu
         if pygame.sprite.spritecollideany(player, targets):
