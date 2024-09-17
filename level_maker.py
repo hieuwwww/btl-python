@@ -8,7 +8,6 @@ def create_level(targets, obstacles, filename):
     
     # Kiểm tra xem đường dẫn có phải là tệp không
     file_path = os.path.join('levels', filename)
-    assert not os.path.isdir(file_path), f"{file_path} is a directory, not a file!"
     
     # Tạo tệp JSON và ghi dữ liệu vào đó
     level_data = {
@@ -21,6 +20,6 @@ def create_level(targets, obstacles, filename):
 
 # Ví dụ tạo level với 3 mục tiêu và 2 chướng ngại vật
 if __name__ == '__main__':
-    targets = [(100, 150), (200, 250), (300, 350)]
+    targets = [(100, 150, 's'), (200, 250, 's'), (300, 650, 'p')]
     obstacles = [(150, 200), (250, 300), (700, 200)]
     create_level(targets, obstacles, 'level1.json')

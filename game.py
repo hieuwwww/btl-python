@@ -54,7 +54,15 @@ class Camera(pygame.sprite.Group):
             offset_pos = sprite.rect.topleft - self.offset
             screen.blit(sprite.image, offset_pos)
             
-
+# Phương thức xử lý di chuyển và va chạm
+def move_entity(entity, direction_vector, speed, obstacles):
+    old_position = entity.rect.topleft
+    # Cập nhật vị trí
+    entity.rect.x += direction_vector.x * speed
+    entity.rect.y += direction_vector.y * speed
+    # Kiểm tra va chạm với chướng ngại vật
+    if collide_with_obstacles(entity, obstacles):
+        entity.rect.topleft = old_position
 # Lớp đối tượng Player
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -168,6 +176,42 @@ class Target(pygame.sprite.Sprite):
 
         # Vẽ lên màn hình chính
         screen.blit(s, (0, 0))
+# Target đi tuần tra khu vực
+class PatrollingTarget(Target):
+    def __init__(self, x, y, patrol_points):
+        super().__init__(x, y)
+        self.patrol_points = patrol_points # Tuần tra theo các điểm
+        self.current_point = 0
+        self.patrol_speed = 0.8
+
+    def update(self, player, obstacles, camera_offset):   
+        if not self.is_active:
+            self.patrol()
+        self.check_cone_of_vision(player)
+        self.draw_vision_cone(player, camera_offset)
+        if self.is_active:
+            self.move_towards_player(player, obstacles)
+    
+    def patrol(self): # Đi tuần
+        # Điểm ban đầu
+        target_point = pygame.Vector2(self.patrol_points[self.current_point])
+
+        direction_vector = target_point - pygame.Vector2(self.rect.center)
+        if direction_vector.length() > 0:
+            direction_vector = direction_vector.normalize()
+        # Di chuyển
+        self.rect.x += direction_vector.x * self.patrol_speed
+        self.rect.y += direction_vector.y * self.patrol_speed
+
+        # Chuyển sang điểm tiếp theo
+        if pygame.Vector2(self.rect.center).distance_to(target_point) < 5:
+            self.current_point = (self.current_point + 1) % len(self.patrol_points)
+        
+        # Chuyển lại hướng
+        self.direction = direction_vector
+
+
+
 
 def collide_with_obstacles(sprites, obstacles): # Va chạm vật thể
         if pygame.sprite.spritecollideany(sprites, obstacles):
@@ -193,12 +237,18 @@ def run_game(level_file):
     # Tạo đối tượng
     player = Player()
     targets = pygame.sprite.Group()
+
     obstacles = pygame.sprite.Group()
     camera = Camera()
     # Tải level
     level_data = load_level(level_file)
     for target_pos in level_data['targets']:
-        targets.add(Target(*target_pos))
+        x = target_pos[0]
+        y = target_pos[1]
+        if target_pos[2] == 's':
+            targets.add(Target(x, y))
+        elif target_pos[2] == 'p':
+            targets.add(PatrollingTarget(x, y, [[x + 50, y],[x - 50, y], [x, y - 50]]))
     for obstacle_pos in level_data['obstacles']:
         obstacles.add(Obstacle(*obstacle_pos))
 
