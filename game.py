@@ -15,7 +15,7 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Sneakerdoodle Game")
 
 
-trigger_distance = 100 # Khoảng cách ngưỡng để kích hoạt mục tiêu
+trigger_distance = 120 # Khoảng cách ngưỡng để kích hoạt mục tiêu
 activation_delay = 0.5  # Thời gian trễ khi target được kích hoạt
 cone_angle = 45
 num_segments = 30
@@ -32,7 +32,7 @@ background_img = pygame.image.load('assets/background.png')
 dog_img = pygame.image.load('assets/dog.png')
 dog_img = pygame.transform.scale(dog_img, (50, 50))
 target_img = pygame.image.load('assets/target.png')
-target_img = pygame.transform.scale(target_img, (50, 50))
+target_img = pygame.transform.scale(target_img, (40, 40))
 obstacle_img = pygame.image.load('assets/obstacle.png')
 obstacle_img = pygame.transform.scale(obstacle_img, (50, 50))
 
@@ -55,14 +55,28 @@ class Camera(pygame.sprite.Group):
             screen.blit(sprite.image, offset_pos)
             
 # Phương thức xử lý di chuyển và va chạm
-def move_entity(entity, direction_vector, speed, obstacles):
+# Phương thức toàn cục xử lý di chuyển, gia tốc và kiểm tra va chạm
+def move_entity(entity, direction_vector, velocity, acceleration, max_speed, obstacles):
+    # Cập nhật vận tốc dựa trên gia tốc và hướng
+    velocity += direction_vector * acceleration
+
+    # Giới hạn tốc độ tối đa
+    if velocity.length() > max_speed:
+        velocity.scale_to_length(max_speed)
+
+    # Lưu vị trí cũ
     old_position = entity.rect.topleft
-    # Cập nhật vị trí
-    entity.rect.x += direction_vector.x * speed
-    entity.rect.y += direction_vector.y * speed
+
+    # Cập nhật vị trí theo vận tốc
+    entity.rect.x += velocity.x
+    entity.rect.y += velocity.y
+
     # Kiểm tra va chạm với chướng ngại vật
     if collide_with_obstacles(entity, obstacles):
-        entity.rect.topleft = old_position
+        entity.rect.topleft = old_position  # Quay về vị trí cũ nếu có va chạm
+
+    return velocity  # Trả về vận tốc mới để tiếp tục cập nhật trong lần sau
+
 # Lớp đối tượng Player
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -72,27 +86,35 @@ class Player(pygame.sprite.Sprite):
         self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         self.speed = 5
         self.sprint_speed = 8
+        self.velocity = pygame.Vector2(0, 0)
+        self.acceleration = 0.5 # Gia tốc
+        self.max_speed = 5 # Tốc độ tối đa
+        self.friction = 0.9 # Ma sát
        
 
     def move(self, keys, obstacles):
+        direction_vector = pygame.Vector2(0, 0)
         if keys[pygame.K_LSHIFT]:  # Nhấn shift để chạy
-            speed = self.sprint_speed
+            self.max_speed = self.sprint_speed
         else:
-            speed = self.speed
-        old_position = self.rect.topleft
+            self.max_speed = self.speed
+        # Xác định hướng di chuyển
         if keys[pygame.K_LEFT]:
-            self.rect.x -= speed
+            direction_vector.x = -1
         if keys[pygame.K_RIGHT]:
-            self.rect.x += speed
+            direction_vector.x = 1
         if keys[pygame.K_UP]:
-            self.rect.y -= speed
+            direction_vector.y = -1
         if keys[pygame.K_DOWN]:
-            self.rect.y += speed
-        if (collide_with_obstacles(self, obstacles)):
-            self.rect.topleft = old_position
-    
-    
-
+            direction_vector.y = 1
+        
+        if direction_vector.length() != 0:
+            direction_vector = direction_vector.normalize()
+        else:
+            self.velocity *= self.friction
+            if self.velocity.length() < 0.1:
+                self.velocity = pygame.Vector2(0, 0)
+        self.velocity = move_entity(self, direction_vector, self.velocity, self.acceleration, self.max_speed, obstacles)
 
 # Lớp đối tượng Target (mục tiêu đuổi theo)
 class Target(pygame.sprite.Sprite):
@@ -101,17 +123,18 @@ class Target(pygame.sprite.Sprite):
         self.image = target_img
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
-        self.speed = 1.5  # Mục tiêu di chuyển chậm hơn người chơi
+        self.max_speed = 2  # Mục tiêu di chuyển chậm hơn người chơi
+        self.acceleration = 0.2
+        self.velocity = pygame.Vector2(0, 0)
         self.is_active = False
         self.direction = pygame.Vector2(random.uniform(-1, 1), random.uniform(-1, 1))  # Hướng nhìn ban đầu (random)
-        # self.last_activation_time = None
 
     def update(self, player, obstacles, camera_offset):
         self.check_cone_of_vision(player)
         self.draw_vision_cone(player, camera_offset)
         # Nếu target đã được kích hoạt, delay 0.5 giây trước khi đuổi
         if self.is_active :
-            self.move_towards_player(player, obstacles)        
+           self.move_towards_player(player, obstacles)
 
     def check_cone_of_vision(self, player):
         # Tính toán vector từ target đến player
@@ -128,23 +151,8 @@ class Target(pygame.sprite.Sprite):
                 self.is_active = True
 
     def move_towards_player(self, player, obstacles):
-        # Di chuyển mục tiêu theo hướng người chơi
-        old_position = self.rect.topleft
-        #Tính vector hướng tới player
         direction_vector = pygame.Vector2(player.rect.center) - pygame.Vector2(self.rect.center)
-        if (direction_vector.length() != 0):
-            direction_vector = direction_vector.normalize()
-
-        #Cập nhật vị trí
-        self.rect.x += direction_vector.x * self.speed
-        self.rect.y += direction_vector.y * self.speed
-
-        #Cập nhật hướng
-        self.direction = direction_vector
-
-        #Kiểm tra va chạm với vật thể
-        if (collide_with_obstacles(self, obstacles)):
-            self.rect.topleft = old_position
+        self.velocity = move_entity(self, direction_vector, self.velocity, self.acceleration, self.max_speed, obstacles)        
 
     def draw_vision_cone(self, player, camera_offset):
         # Tạo surface tạm thời với alpha để vẽ hình nón
