@@ -9,7 +9,6 @@ import time
 pygame.init()
 
 # Cài đặt màn hình
-MAP_WIDTH, MAP_HEIGHT = 1600, 1200
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Sneakerdoodle Game")
@@ -29,11 +28,17 @@ def distance(pos1, pos2):
 
 # Tải hình ảnh tạm thời
 background_img = pygame.image.load('assets/background.png')
-dog_img = pygame.image.load('assets/dog.png')
+MAP_WIDTH, MAP_HEIGHT = background_img.get_width(), background_img.get_height()
+
+dog_img = pygame.image.load('assets/dog.png').convert_alpha()
 dog_img = pygame.transform.scale(dog_img, (50, 50))
-target_img = pygame.image.load('assets/target.png')
+target_img = pygame.image.load('assets/target.png').convert_alpha()
 target_img = pygame.transform.scale(target_img, (40, 40))
-obstacle_img = pygame.image.load('assets/obstacle.png')
+patrol_target_img = pygame.image.load('assets/patrol_target.png').convert_alpha()
+patrol_target_img = pygame.transform.scale(patrol_target_img, (40, 40))
+distracted_target_img = pygame.image.load('assets/distracted_target.png').convert_alpha()
+distracted_target_img = pygame.transform.scale(distracted_target_img, (40, 40))
+obstacle_img = pygame.image.load('assets/obstacle.png').convert_alpha()
 obstacle_img = pygame.transform.scale(obstacle_img, (50, 50))
 
 # Lớp Camera
@@ -49,12 +54,14 @@ class Camera(pygame.sprite.Group):
         self.offset.y = player.rect.centery - SCREEN_HEIGHT // 2
 
         floor_offset_pos = self.floor_rect.topleft - self.offset
+
+
         screen.blit(background_img, floor_offset_pos)
+        
         for sprite in all_sprites:
             offset_pos = sprite.rect.topleft - self.offset
             screen.blit(sprite.image, offset_pos)
             
-# Phương thức xử lý di chuyển và va chạm
 # Phương thức toàn cục xử lý di chuyển, gia tốc và kiểm tra va chạm
 def move_entity(entity, direction_vector, velocity, acceleration, max_speed, obstacles):
     # Cập nhật vận tốc dựa trên gia tốc và hướng
@@ -70,6 +77,16 @@ def move_entity(entity, direction_vector, velocity, acceleration, max_speed, obs
     # Cập nhật vị trí theo vận tốc
     entity.rect.x += velocity.x
     entity.rect.y += velocity.y
+    
+    # Kiểm tra ko ra ngoài bản đồ
+    if entity.rect.left < 0:
+        entity.rect.left = 0
+    if entity.rect.right > MAP_WIDTH:
+        entity.rect.right = MAP_WIDTH
+    if entity.rect.top < 0:
+        entity.rect.top = 0
+    if entity.rect.bottom > MAP_HEIGHT:
+        entity.rect.bottom = MAP_HEIGHT
 
     # Kiểm tra va chạm với chướng ngại vật
     if collide_with_obstacles(entity, obstacles):
@@ -108,6 +125,7 @@ class Player(pygame.sprite.Sprite):
         if keys[pygame.K_DOWN]:
             direction_vector.y = 1
         
+        
         if direction_vector.length() != 0:
             direction_vector = direction_vector.normalize()
         else:
@@ -118,9 +136,9 @@ class Player(pygame.sprite.Sprite):
 
 # Lớp đối tượng Target (mục tiêu đuổi theo)
 class Target(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, image):
         super().__init__()
-        self.image = target_img
+        self.image = image
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
         self.max_speed = 2  # Mục tiêu di chuyển chậm hơn người chơi
@@ -149,10 +167,11 @@ class Target(pygame.sprite.Sprite):
             # Nếu player nằm trong hình nón của target (dựa trên góc cone_angle)
             if abs(angle) <= cone_angle / 2:
                 self.is_active = True
+                return True
 
     def move_towards_player(self, player, obstacles):
-        direction_vector = pygame.Vector2(player.rect.center) - pygame.Vector2(self.rect.center)
-        self.velocity = move_entity(self, direction_vector, self.velocity, self.acceleration, self.max_speed, obstacles)        
+        self.direction = pygame.Vector2(player.rect.center) - pygame.Vector2(self.rect.center)
+        self.velocity = move_entity(self, self.direction, self.velocity, self.acceleration, self.max_speed, obstacles)        
 
     def draw_vision_cone(self, player, camera_offset):
         # Tạo surface tạm thời với alpha để vẽ hình nón
@@ -186,8 +205,8 @@ class Target(pygame.sprite.Sprite):
         screen.blit(s, (0, 0))
 # Target đi tuần tra khu vực
 class PatrollingTarget(Target):
-    def __init__(self, x, y, patrol_points):
-        super().__init__(x, y)
+    def __init__(self, x, y, image, patrol_points):
+        super().__init__(x, y, image)
         self.patrol_points = patrol_points # Tuần tra theo các điểm
         self.current_point = 0
         self.patrol_speed = 0.8
@@ -218,11 +237,26 @@ class PatrollingTarget(Target):
         # Chuyển lại hướng
         self.direction = direction_vector
 
+class DistractedTarget(Target):
+    def __init__(self, x, y, image):
+        super().__init__(x, y, image)
+        self.attention_span = 5
+        self.last_activation = 0
+
+    def deactivate(self, player):
+        if self.check_cone_of_vision(player):
+            self.last_activation = time.time()
+        if time.time() - self.last_activation > self.attention_span:
+            self.is_active = False
+    
+    def update(self, player, obstacles, camera_offset):
+        self.deactivate(player)
+        super().update(player, obstacles, camera_offset)
 
 
 
 def collide_with_obstacles(sprites, obstacles): # Va chạm vật thể
-        if pygame.sprite.spritecollideany(sprites, obstacles):
+        if pygame.sprite.spritecollideany(sprites, obstacles) and pygame.sprite.spritecollideany(sprites, obstacles, pygame.sprite.collide_mask):
             return True
         return False
 
@@ -243,6 +277,7 @@ def load_level(filename):
 # Hàm chính để chạy game
 def run_game(level_file):
     # Tạo đối tượng
+    
     player = Player()
     targets = pygame.sprite.Group()
 
@@ -254,9 +289,11 @@ def run_game(level_file):
         x = target_pos[0]
         y = target_pos[1]
         if target_pos[2] == 's':
-            targets.add(Target(x, y))
+            targets.add(Target(x, y, target_img))
         elif target_pos[2] == 'p':
-            targets.add(PatrollingTarget(x, y, [[x + 50, y],[x - 50, y], [x, y - 50]]))
+            targets.add(PatrollingTarget(x, y, patrol_target_img, [[x + 50, y],[x - 50, y], [x, y - 50]]))
+        elif target_pos[2] == 'd':
+            targets.add(DistractedTarget(x, y, distracted_target_img))
     for obstacle_pos in level_data['obstacles']:
         obstacles.add(Obstacle(*obstacle_pos))
 
@@ -269,6 +306,7 @@ def run_game(level_file):
     clock = pygame.time.Clock()
     running = True
     while running:
+        screen.fill((0, 0, 0))
         # Vẽ tất cả các đối tượng
         camera.custom_draw(player, all_sprites)
         keys = pygame.key.get_pressed()
