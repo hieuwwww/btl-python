@@ -4,9 +4,17 @@ import os
 import random
 import math
 import time
-
+import sys
 # Khởi tạo Pygame
 pygame.init()
+
+# Biến xử lý cho class Slider
+UNSELECTED = "red"
+SELECTED = "white"
+BUTTONSTATES = {
+    True:SELECTED,
+    False:UNSELECTED
+}
 
 # Cài đặt màn hình
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
@@ -40,6 +48,82 @@ distracted_target_img = pygame.image.load('assets/distracted_target.png').conver
 distracted_target_img = pygame.transform.scale(distracted_target_img, (40, 40))
 obstacle_img = pygame.image.load('assets/obstacle.png').convert_alpha()
 obstacle_img = pygame.transform.scale(obstacle_img, (50, 50))
+start_img = pygame.image.load("assets/start_button.png").convert_alpha()
+exit_img = pygame.image.load("assets/exit_button.png").convert_alpha()
+pause_img = pygame.image.load("assets/pause_button.png").convert_alpha()
+resume_img = pygame.image.load("assets/resume_button.png").convert_alpha()
+main_menu_img = pygame.image.load("assets/main_menu_button.png").convert_alpha()
+retry_img = pygame.image.load("assets/retry_button.png").convert_alpha()
+to_main_menu_img = pygame.image.load("assets/to_main_menu_button.png").convert_alpha()
+
+#Tải âm thanh tạm thời
+pygame.mixer.music.load("assets/background_music.mp3")
+pygame.mixer.music.set_volume(0.3)
+
+#Lớp Button
+class Button():
+    def __init__(self, x, y, image, scale):
+        width = image.get_width()
+        height = image.get_height()
+
+        self.image = pygame.transform.scale(image, (int(width*scale), int(height*scale)))
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x, y)
+    
+    def draw(self, cur_screen):
+        action = False
+        pos = pygame.mouse.get_pos()
+        if self.rect.collidepoint(pos):
+            if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
+                self.clicked = True
+                action = True   
+        if pygame.mouse.get_pressed()[0] == 0:
+            self.clicked = False
+        cur_screen.blit(self.image, (self.rect.x, self.rect.y))
+        return action
+
+#Lớp Slider
+class Slider:
+    def __init__(self, pos: tuple, size: tuple, initial_val: float, min: int, max: int) -> None:
+        self.pos = pos
+        self.size = size
+        self.hovered = False
+        self.grabbed = False
+
+        self.slider_left_pos = self.pos[0] - (size[0]//2)
+        self.slider_right_pos = self.pos[0] + (size[0]//2)
+        self.slider_top_pos = self.pos[1] - (size[1]//2)
+
+        self.min = min
+        self.max = max
+        self.initial_val = (self.slider_right_pos-self.slider_left_pos)*initial_val # <- percentage
+
+        self.container_rect = pygame.Rect(self.slider_left_pos, self.slider_top_pos, self.size[0], self.size[1])
+        self.button_rect = pygame.Rect(self.slider_left_pos + self.initial_val - 5, self.slider_top_pos, 10, self.size[1])
+
+        # label
+        #self.text = UI.fonts['m'].render(str(int(self.get_value())), True, "white", None)
+        #self.label_rect = self.text.get_rect(center = (self.pos[0], self.slider_top_pos - 15))
+        
+    def move_slider(self, mouse_pos):
+        pos = mouse_pos[0]
+        if pos < self.slider_left_pos:
+            pos = self.slider_left_pos
+        if pos > self.slider_right_pos:
+            pos = self.slider_right_pos
+        self.button_rect.centerx = pos
+    def hover(self):
+        self.hovered = True
+    def render(self, screen):
+        pygame.draw.rect(screen, "darkgray", self.container_rect)
+        pygame.draw.rect(screen, BUTTONSTATES[self.hovered], self.button_rect)
+    def get_value(self):
+        val_range = self.slider_right_pos - self.slider_left_pos - 1
+        button_val = self.button_rect.centerx - self.slider_left_pos
+        return (button_val/val_range)
+    # def display_value(self, app):
+    #     self.text = UI.fonts['m'].render(str(int(self.get_value())), True, "white", None)
+    #     app.screen.blit(self.text, self.label_rect)
 
 # Lớp Camera
 class Camera(pygame.sprite.Group):
@@ -277,12 +361,19 @@ def load_level(filename):
 # Hàm chính để chạy game
 def run_game(level_file):
     # Tạo đối tượng
-    
+    volume_slider = Slider((500, 700),(450, 50), 0.5, 0, 1)
     player = Player()
     targets = pygame.sprite.Group()
 
     obstacles = pygame.sprite.Group()
     camera = Camera()
+    start_button = Button(100, 200, start_img, 0.5)
+    exit_button = Button(300, 200, exit_img, 0.5)
+    pause_button = Button(50, 50, pause_img, 0.5)
+    resume_button = Button(75, 50, resume_img, 1)
+    main_menu_button = Button(75, 150, main_menu_img, 0.5)
+    retry_button = Button(100, 200, retry_img, 0.5)
+    to_main_menu_button = Button(300, 200, to_main_menu_img, 0.5)
     # Tải level
     level_data = load_level(level_file)
     for target_pos in level_data['targets']:
@@ -304,35 +395,52 @@ def run_game(level_file):
     
     # Vòng lặp game
     clock = pygame.time.Clock()
-    running = True
-    while running:
-        screen.fill((0, 0, 0))
-        # Vẽ tất cả các đối tượng
-        camera.custom_draw(player, all_sprites)
-        keys = pygame.key.get_pressed()
-
-        # Di chuyển player
-        player.move(keys, obstacles)
-
-        # Cập nhật vị trí mục tiêu
-        targets.update(player, obstacles, camera.offset)
-
-        # Kiểm tra nếu người chơi va chạm mục tiêu
-        if pygame.sprite.spritecollideany(player, targets):
-            print("You got caught!")
-            running = False
-
-        # Cập nhật màn hình
-        pygame.display.flip()
-
-        # Tốc độ khung hình
-        clock.tick(60)
-
-        # Kiểm tra sự kiện
+    game_state = "start"
+    running = False
+    pygame.mixer.music.play()
+    while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
+                pygame.quit()
+                sys.exit()
+        if game_state == "start":
+            screen.fill(WHITE)
+            print("YIPEE")
+            if start_button.draw(screen):
+                game_state = "ingame"
+            if exit_button.draw(screen):
+                pygame.quit()
+                sys.exit()
+        if game_state == "ingame":
+            camera.custom_draw(player, all_sprites)
+            keys = pygame.key.get_pressed()
+            # Di chuyển player
+            player.move(keys, obstacles)
+            # Cập nhật vị trí mục tiêu
+            targets.update(player, obstacles, camera.offset)
+            # Kiểm tra nếu người chơi va chạm mục tiêu
+            if pygame.sprite.spritecollideany(player, targets):
+                print("You got caught!")
+                game_state = "game_over"
+                running = False
+            # Cập nhật màn hình
+            pygame.display.flip()
+            # Tốc độ khung hình
+            clock.tick(60)
+            if pause_button.draw(screen):
+                game_state = "pause"
+        if game_state == "game_over":
+            if retry_button.draw(screen):
+                game_state = "ingame"
+            if to_main_menu_button.draw(screen):
+                game_state = "start"
+        if game_state == "pause":
+            if resume_button.draw(screen):
+                game_state = "ingame"
+            if to_main_menu_button.draw(screen):
+                game_state = "start"
+        print(game_state)
     pygame.quit()
 
 if __name__ == '__main__':
