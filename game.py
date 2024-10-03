@@ -44,8 +44,7 @@ patrol_target_img = pygame.image.load('assets/patrol_target.png').convert_alpha(
 patrol_target_img = pygame.transform.scale(patrol_target_img, (40, 40))
 distracted_target_img = pygame.image.load('assets/distracted_target.png').convert_alpha()
 distracted_target_img = pygame.transform.scale(distracted_target_img, (40, 40))
-obstacle_img = pygame.image.load('assets/obstacle.png').convert_alpha()
-obstacle_img = pygame.transform.scale(obstacle_img, (120, 120))
+
 
 
 # Lớp Camera
@@ -448,11 +447,40 @@ class DistractedTarget(Target):
         if time.time() - self.last_activation > self.attention_span:
             self.is_active = False
 
+def create_custom_mask(sprite, x, y, offset_x=0, offset_y=0):
+    """Tạo một mask hình vuông nhỏ hơn ở giữa sprite."""
+    # Tạo một surface tạm thời để vẽ hình vuông
+    square_surface = pygame.Surface((x, y), pygame.SRCALPHA)
+    square_surface.fill((255, 255, 255))  # Màu trắng cho vùng hitbox
 
-def collide_with_obstacles(sprites, obstacles):  # Va chạm vật thể
-    if pygame.sprite.spritecollideany(sprites, obstacles) and pygame.sprite.spritecollideany(sprites, obstacles, pygame.sprite.collide_mask):
-        return True
-    return False
+    # Tạo một mask từ surface này
+    square_mask = pygame.mask.from_surface(square_surface)
+
+    # Cập nhật vị trí của mask dựa trên offset
+    square_rect = square_surface.get_rect(center=sprite.rect.topleft)
+    square_rect.y += offset_y
+    square_rect.x += offset_x
+
+    return square_mask, square_rect
+
+def collide_with_obstacles(sprite, obstacles):
+    """Kiểm tra va chạm giữa sprite và obstacles với hitbox vuông nhỏ hơn."""
+    # Duyệt qua từng obstacle
+    for obstacle in obstacles:
+        # Tạo mask hình vuông nhỏ hơn cho obstacle
+        obstacle_mask, obstacle_rect = create_custom_mask(obstacle, obstacle.width, obstacle.height, obstacle.x_offset, obstacle.y_offset)
+        
+        # Lấy mask và vị trí của sprite
+        sprite_mask = pygame.mask.from_surface(sprite.image)
+        sprite_rect = sprite.rect
+        
+        # Tính toán offset giữa sprite và obstacle để kiểm tra overlap
+        offset = (obstacle_rect.left - sprite_rect.left, obstacle_rect.top - sprite_rect.top)
+
+        # Kiểm tra va chạm giữa sprite mask và obstacle mask nhỏ hơn
+        if sprite_mask.overlap(obstacle_mask, offset):
+            return True  # Có va chạm
+    return False  # Không có va chạm
 
 def custom_collide_shrunken_mask(sprite1, sprite2):
     # Shrink mask của sprite1 và sprite2
@@ -466,11 +494,15 @@ def custom_collide_shrunken_mask(sprite1, sprite2):
     return mask1.overlap(mask2, offset) is not None
 # Lớp Obstacle (chướng ngại vật)
 class Obstacle(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self,x_pos, y_pos, image_path, width, height,x_offset, y_offset):
         super().__init__()
-        self.image = obstacle_img
+        self.image = pygame.image.load(image_path).convert_alpha()
         self.rect = self.image.get_rect()
-        self.rect.center = (x, y)
+        self.rect.center = (x_pos, y_pos)
+        self.x_offset = x_offset
+        self.y_offset = y_offset
+        self.width = width
+        self.height = height
 
 
 # Hàm tải level từ file JSON
@@ -572,12 +604,10 @@ def start_screen():
 
         # Vẽ nút và kiểm tra xem có nhấn nút nào không
         if start_button.draw(screen):
-            print("Start button clicked! Moving to the game...")
             # Gọi hàm bắt đầu game khi nhấn nút Start
             running = False
             run_game('level1.json')
         if exit_button.draw(screen):
-            print("Exit button clicked! Exiting game...")
             pygame.quit()
             exit()  # Thoát chương trình khi nhấn nút Exit
 
@@ -672,9 +702,10 @@ def run_game(level_file):
             targets.add(PatrollingTarget(x, y, patrol_target_img, [[x + 50, y], [x - 50, y], [x, y - 50]]))
         elif target_pos[2] == 'd':
             targets.add(DistractedTarget(x, y, distracted_target_img))
-    for obstacle_pos in level_data['obstacles']:
-        obstacles.add(Obstacle(*obstacle_pos))
-
+    for obstacle in level_data['obstacles']:
+        obstacles.add(Obstacle(*obstacle))
+        # print(*obstacle)
+    
     all_sprites = pygame.sprite.Group(player, targets, obstacles)
 
     # Vòng lặp game
