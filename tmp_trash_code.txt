@@ -1,0 +1,147 @@
+#Ver 2
+        if game_state != "ingame":
+            screen.fill((0,0,255))
+            print("WORKING")
+        if game_state == "start":
+            if start_button.draw(screen):
+                game_state = "ingame"
+                #continue
+            if exit_button.draw(screen):
+                pygame.quit()
+                sys.exit()
+            #continue
+        """if game_state == "ingame":
+            if not running:
+                # Tải level
+                running = True
+                level_data = load_level(level_file)
+                for target_pos in level_data['targets']:
+                    x = target_pos[0]
+                    y = target_pos[1]
+                    if target_pos[2] == 's':
+                        targets.add(Target(x, y, target_img))
+                    elif target_pos[2] == 'p':
+                        targets.add(PatrollingTarget(x, y, patrol_target_img, [[x + 50, y],[x - 50, y], [x, y - 50]]))
+                    elif target_pos[2] == 'd':
+                        targets.add(DistractedTarget(x, y, distracted_target_img))
+                for obstacle_pos in level_data['obstacles']:
+                    obstacles.add(Obstacle(*obstacle_pos))
+                all_sprites = pygame.sprite.Group(player, targets, obstacles)
+            else:
+                camera.custom_draw(player, all_sprites)
+                keys = pygame.key.get_pressed()
+                # Di chuyển player
+                player.move(keys, obstacles)
+                # Cập nhật vị trí mục tiêu
+                targets.update(player, obstacles, camera.offset)
+                # Kiểm tra nếu người chơi va chạm mục tiêu
+                if pygame.sprite.spritecollideany(player, targets):
+                    print("You got caught!")
+                    game_state = "game_over"
+                    running = False
+                    continue
+                # Cập nhật màn hình
+                pygame.display.flip()
+                # Tốc độ khung hình
+                clock.tick(60)
+            if pause_button.draw(screen):
+                game_state = "pause"
+            continue
+        if game_state == "game_over":
+            if retry_button.draw(screen):
+                game_state = "ingame"
+                continue
+            if to_main_menu_button.draw(screen):
+                game_state = "start"
+            continue
+        if game_state == "pause":
+            if resume_button.draw(screen):
+                game_state = "ingame"
+                continue
+            if to_main_menu_button.draw(screen):
+                game_state = "start"
+            continue"""
+
+
+        #Ver 1
+        if game_state != "ingame":
+            screen.fill((WHITE))
+        if game_state != "pause" and game_state != "game over":
+            if game_state == "start" and start_button.draw(screen):
+                game_state = "ingame"
+            if game_state == "ingame" and pause_button.draw(screen):
+                game_state = "pause"
+                pygame.mixer.music.pause()
+                continue
+
+        if exit_button.draw(screen):
+            pygame.quit()
+            sys.exit()
+
+        if game_state == "ingame":
+            if not running:
+            # Vẽ tất cả các đối tượng
+                camera.custom_draw(player, all_sprites)
+                running = True
+            else:
+                keys = pygame.key.get_pressed()
+
+            # Di chuyển player
+                player.move(keys, obstacles)
+
+                # Cập nhật vị trí mục tiêu
+                targets.update(player, obstacles, camera.offset)
+
+                # Kiểm tra nếu người chơi va chạm mục tiêu
+                if pygame.sprite.spritecollideany(player, targets):
+                    print("You got caught!")
+                    game_state = "game_over"
+                    running = False
+
+                # Cập nhật màn hình
+                pygame.display.flip()
+
+                # Tốc độ khung hình
+                clock.tick(60)
+
+        elif game_state == "pause":
+            
+            if resume_button.draw(screen):
+                game_state = "ingame"
+                pygame.mixer.music.unpause()
+
+            if main_menu_button.draw(screen):
+                game_state = "start"
+                pygame.mixer.music.unpause()
+
+        else:
+            if retry_button.draw(screen):
+                game_state = "ingame"
+                pygame.mixer.music.unpause()
+            if to_main_menu_button.draw(screen):
+                game_state = "start"
+        if game_state == "start" or game_state == "pause":
+                volume_slider.render(screen)
+                mouse_pos = pygame.mouse.get_pos()
+                mouse_state = pygame.mouse.get_pressed()
+                if volume_slider.container_rect.collidepoint(mouse_pos):
+                    if mouse_state[0]:
+                        volume_slider.grabbed = True
+                if not mouse_state[0]:
+                    volume_slider.grabbed = False
+                if volume_slider.button_rect.collidepoint(mouse_pos):  
+                    volume_slider.hover()
+                if volume_slider.grabbed:
+                    volume_slider.move_slider(mouse_pos)
+                    volume_slider.hover()
+                else:
+                    volume_slider.hovered = False
+                pygame.mixer.music.set_volume(volume_slider.get_value())
+
+        # Kiểm tra sự kiện
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                pygame.quit()
+                sys.exit()
+        print(game_state)
