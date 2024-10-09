@@ -36,16 +36,6 @@ def distance(pos1, pos2):
 background_img = pygame.image.load('assets/background.png')
 MAP_WIDTH, MAP_HEIGHT = background_img.get_width(), background_img.get_height()
 
-dog_img = pygame.image.load('assets/dog.png').convert_alpha()
-dog_img = pygame.transform.scale(dog_img, (50, 50))
-target_img = pygame.image.load('assets/target.png').convert_alpha()
-target_img = pygame.transform.scale(target_img, (40, 40))
-patrol_target_img = pygame.image.load('assets/patrol_target.png').convert_alpha()
-patrol_target_img = pygame.transform.scale(patrol_target_img, (40, 40))
-distracted_target_img = pygame.image.load('assets/distracted_target.png').convert_alpha()
-distracted_target_img = pygame.transform.scale(distracted_target_img, (40, 40))
-
-
 
 # Lớp Camera
 class Camera(pygame.sprite.Group):
@@ -76,10 +66,7 @@ def move_entity(entity, direction_vector, velocity, acceleration, max_speed, obs
     # Giới hạn tốc độ tối đa
     if velocity.length() > max_speed:
         velocity.scale_to_length(max_speed)
-
-    # Lưu vị trí cũ
     old_position = entity.rect.topleft
-
     # Cập nhật vị trí theo vận tốc
     entity.rect.x += velocity.x
     entity.rect.y += velocity.y
@@ -95,14 +82,39 @@ def move_entity(entity, direction_vector, velocity, acceleration, max_speed, obs
         entity.rect.bottom = MAP_HEIGHT
 
     # Kiểm tra va chạm với chướng ngại vật
-    if collide_with_obstacles(entity, obstacles):
-        entity.rect.topleft = old_position  # Quay về vị trí cũ nếu có va chạm
+    for obstacle in obstacles:
+        if collide_with_obstacle(entity, obstacle):
+            handle_collision(entity, obstacle)
 
     return velocity  # Trả về vận tốc mới để tiếp tục cập nhật trong lần sau
 #Thu gọn mask để va chạm mượt hơn
 def shrink_mask(mask):
     return mask.scale((mask.get_size()[0] - 5, mask.get_size()[1] - 5))
-
+# Pseudocode for handling smooth sliding collisions
+def handle_collision(sprite, obstacle):
+    if sprite.rect.colliderect(obstacle.rect):
+        old_pos = sprite.rect
+        # Kiểm tra va chạm từ các hướng
+        if 40 < sprite.rect.right - obstacle.rect.left  < 50 and sprite.velocity.x > 0:
+            # Va chạm từ bên trái
+            sprite.rect.x = old_pos.x - 1  # Đặt lại vị trí để không đi xuyên qua
+            sprite.velocity.x = 0
+            sprite.velocity.y *= 0.8
+        if 30 < obstacle.rect.right  -  sprite.rect.left < 45 and sprite.velocity.x < 0:
+            # Va chạm từ bên phải
+            sprite.rect.x = old_pos.x
+            sprite.velocity.x = 0
+            sprite.velocity.y *= 0.8
+        if  90 < sprite.rect.bottom - obstacle.rect.top < 105 and sprite.velocity.y > 0:
+            # Va chạm từ trên
+            sprite.rect.y = old_pos.y - 1
+            sprite.velocity.y = 0
+            sprite.velocity.x *= 0.8
+        if 30 < obstacle.rect.bottom - sprite.rect.top < 45 and sprite.velocity.y < 0:
+            # Va chạm từ dưới
+            sprite.velocity.y = 0
+            sprite.velocity.x *= 0.8
+            sprite.rect.y = old_pos.y
 # Lớp Player với animation
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -115,6 +127,8 @@ class Player(pygame.sprite.Sprite):
         self.image = self.idle_images[self.current_frame]
         self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect()
+        self.rect.x -= 5
+        self.rect.y -= 5
         self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 
         self.speed = 5
@@ -187,7 +201,7 @@ class Player(pygame.sprite.Sprite):
 
 # Lớp đối tượng Target (mục tiêu đuổi theo)
 class Target(pygame.sprite.Sprite):
-    def __init__(self, x, y, image):
+    def __init__(self, x, y):
         super().__init__()
         # Thêm hình ảnh animation idle và moving
         self.idle_images = [pygame.transform.scale(pygame.image.load(f'assets/target_move/target_idle_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
@@ -294,8 +308,8 @@ class Target(pygame.sprite.Sprite):
 
 # Target đi tuần tra khu vực
 class PatrollingTarget(Target):
-    def __init__(self, x, y, image, patrol_points):
-        super().__init__(x, y, image)
+    def __init__(self, x, y, patrol_points):
+        super().__init__(x, y )
         self.run_images = [pygame.transform.scale(pygame.image.load(f'assets/patrolling_move/patrolling_{i}.png').convert_alpha(), (60, 70)) for i in range(4)]
         self.animation_speed = 100
         self.current_frame = 0
@@ -356,8 +370,8 @@ class PatrollingTarget(Target):
                 self.run_images = [pygame.transform.flip(move_image, True, False) for move_image in self.run_images]
 
 class DistractedTarget(Target):
-    def __init__(self, x, y, image):
-        super().__init__(x, y, image)
+    def __init__(self, x, y):
+        super().__init__(x, y)
         # them anh animation idle, move, stop
         self.idle_image = [pygame.transform.scale(pygame.image.load(f'assets/distracted_move/distracted_idle_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
         self.move_image = [pygame.transform.scale(pygame.image.load(f'assets/distracted_move/distracted_move_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
@@ -463,23 +477,20 @@ def create_custom_mask(sprite, x, y, offset_x=0, offset_y=0):
 
     return square_mask, square_rect
 
-def collide_with_obstacles(sprite, obstacles):
-    """Kiểm tra va chạm giữa sprite và obstacles với hitbox vuông nhỏ hơn."""
-    # Duyệt qua từng obstacle
-    for obstacle in obstacles:
-        # Tạo mask hình vuông nhỏ hơn cho obstacle
-        obstacle_mask, obstacle_rect = create_custom_mask(obstacle, obstacle.width, obstacle.height, obstacle.x_offset, obstacle.y_offset)
-        
-        # Lấy mask và vị trí của sprite
-        sprite_mask = pygame.mask.from_surface(sprite.image)
-        sprite_rect = sprite.rect
-        
-        # Tính toán offset giữa sprite và obstacle để kiểm tra overlap
-        offset = (obstacle_rect.left - sprite_rect.left, obstacle_rect.top - sprite_rect.top)
+def collide_with_obstacle(sprite, obstacle):
+    # Tạo mask hình vuông nhỏ hơn cho obstacle
+    obstacle_mask, obstacle_rect = create_custom_mask(obstacle, obstacle.width, obstacle.height, obstacle.x_offset, obstacle.y_offset)
+    
+    # Lấy mask và vị trí của sprite
+    sprite_mask = pygame.mask.from_surface(sprite.image)
+    sprite_rect = sprite.rect
+    
+    # Tính toán offset giữa sprite và obstacle để kiểm tra overlap
+    offset = (obstacle_rect.left - sprite_rect.left, obstacle_rect.top - sprite_rect.top)
 
-        # Kiểm tra va chạm giữa sprite mask và obstacle mask nhỏ hơn
-        if sprite_mask.overlap(obstacle_mask, offset):
-            return True  # Có va chạm
+    # Kiểm tra va chạm giữa sprite mask và obstacle mask nhỏ hơn
+    if sprite_mask.overlap(obstacle_mask, offset):
+        return True  # Có va chạm
     return False  # Không có va chạm
 
 def custom_collide_shrunken_mask(sprite1, sprite2):
@@ -567,25 +578,23 @@ class Button:
         self.clicked = False  # Thêm biến này để theo dõi trạng thái nhấn
     
     def draw(self, cur_screen):
-        # Lấy vị trí chuột hiện tại
-        pos = pygame.mouse.get_pos()
-        action = False  # Biến để xác định có nhấn hay không
+        try:
+            pos = pygame.mouse.get_pos()
+            action = False
 
-        # Kiểm tra nếu con trỏ chuột đang nằm trên nút
-        if self.rect.collidepoint(pos):
-            # Kiểm tra nếu nhấn chuột trái
-            if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
-                self.clicked = True  # Cập nhật trạng thái là đã nhấn
-                action = True  # Xác định đã có hành động nhấn
-                print("Button clicked!")
-            # Kiểm tra nếu chuột không còn nhấn
-            if pygame.mouse.get_pressed()[0] == 0:
-                self.clicked = False  # Reset trạng thái để cho phép nhấn tiếp
-        
-        # Vẽ nút lên màn hình
-        cur_screen.blit(self.image, (self.rect.x, self.rect.y))
-        
-        return action  # Trả về True nếu nút được nhấn
+            if self.rect.collidepoint(pos):
+                if pygame.mouse.get_pressed()[0] == 1 and not self.clicked:
+                    self.clicked = True
+                    action = True
+                    print("Button clicked!")
+                if pygame.mouse.get_pressed()[0] == 0:
+                    self.clicked = False
+
+            cur_screen.blit(self.image, (self.rect.x, self.rect.y))
+            return action
+
+        except Exception as e:
+            return False
 # Chạy màn hình bắt đầu
 start_img = pygame.image.load("assets/start_button.png").convert_alpha()
 exit_img = pygame.image.load("assets/exit_button.png").convert_alpha()
@@ -601,17 +610,17 @@ def start_screen():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            else :
+                # Vẽ nút và kiểm tra xem có nhấn nút nào không
+                if start_button.draw(screen):
+                    # Gọi hàm bắt đầu game khi nhấn nút Start
+                    running = False
+                    run_game('level1.json')
+                if exit_button.draw(screen):
+                    pygame.quit()
+                    exit()  # Thoát chương trình khi nhấn nút Exit
 
-        # Vẽ nút và kiểm tra xem có nhấn nút nào không
-        if start_button.draw(screen):
-            # Gọi hàm bắt đầu game khi nhấn nút Start
-            running = False
-            run_game('level1.json')
-        if exit_button.draw(screen):
-            pygame.quit()
-            exit()  # Thoát chương trình khi nhấn nút Exit
-
-        # Cập nhật màn hình
+                # Cập nhật màn hình
         pygame.display.update()
 
 #Chạy màn hình pause game
@@ -697,11 +706,11 @@ def run_game(level_file):
         x = target_pos[0]
         y = target_pos[1]
         if target_pos[2] == 's':
-            targets.add(Target(x, y, target_img))
+            targets.add(Target(x, y))
         elif target_pos[2] == 'p':
-            targets.add(PatrollingTarget(x, y, patrol_target_img, [[x + 50, y], [x - 50, y], [x, y - 50]]))
+            targets.add(PatrollingTarget(x, y,  [[x + 50, y], [x - 50, y], [x, y - 50]]))
         elif target_pos[2] == 'd':
-            targets.add(DistractedTarget(x, y, distracted_target_img))
+            targets.add(DistractedTarget(x, y ))
     for obstacle in level_data['obstacles']:
         obstacles.add(Obstacle(*obstacle))
         # print(*obstacle)
@@ -749,4 +758,4 @@ def run_game(level_file):
 
 if __name__ == '__main__':
     start_screen()
-    #run_game('level1.json')
+    run_game('level1.json')
