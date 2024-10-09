@@ -495,7 +495,7 @@ def custom_collide_shrunken_mask(sprite1, sprite2):
     return mask1.overlap(mask2, offset) is not None
 # Lớp Obstacle (chướng ngại vật)
 class Obstacle(pygame.sprite.Sprite):
-    def __init__(self,x_pos, y_pos, image_path, width, height,x_offset, y_offset):
+    def __init__(self,x_pos, y_pos, image_path, width, height, x_offset, y_offset):
         super().__init__()
         self.image = pygame.image.load(image_path).convert_alpha()
         self.rect = self.image.get_rect()
@@ -729,6 +729,7 @@ def run_game(level_file):
         if pygame.sprite.spritecollideany(player, targets, custom_collide_shrunken_mask):
             print("You got caught!")
             return game_over_screen()
+
         if options_button.draw(screen):
             print("Opening Options...")
             options_screen()  # Mở menu Options khi nhấn nút
