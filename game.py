@@ -84,14 +84,44 @@ def move_entity(entity, direction_vector, velocity, acceleration, max_speed, obs
     # Kiểm tra va chạm với chướng ngại vật
     for obstacle in obstacles:
         if collide_with_obstacle(entity, obstacle):
-            handle_collision(entity, obstacle)
+            obstacle.image.set_alpha(128)
+            if obstacle.image_path == 'assets/stone.png':
+                handle_collision_small(entity, obstacle)
+            else:
+                handle_collision_large(entity, obstacle)
+        else:
+            obstacle.image.set_alpha(255)
 
     return velocity  # Trả về vận tốc mới để tiếp tục cập nhật trong lần sau
 #Thu gọn mask để va chạm mượt hơn
 def shrink_mask(mask):
     return mask.scale((mask.get_size()[0] - 5, mask.get_size()[1] - 5))
 # Pseudocode for handling smooth sliding collisions
-def handle_collision(sprite, obstacle):
+def handle_collision_small(sprite, obstacle):
+    if sprite.rect.colliderect(obstacle.rect):
+        old_pos = sprite.rect
+        # Kiểm tra va chạm từ các hướng
+        if 10 < sprite.rect.right - obstacle.rect.left  < 25 and sprite.velocity.x > 0:
+            # Va chạm từ bên trái
+            sprite.rect.x = old_pos.x - 1  # Đặt lại vị trí để không đi xuyên qua
+            sprite.velocity.x = 0
+            sprite.velocity.y *= 0.8
+        if 10 < obstacle.rect.right  -  sprite.rect.left < 25 and sprite.velocity.x < 0:
+            # Va chạm từ bên phải
+            sprite.rect.x = old_pos.x + 1
+            sprite.velocity.x = 0
+            sprite.velocity.y *= 0.8
+        if  10 < sprite.rect.bottom - obstacle.rect.top < 25 and sprite.velocity.y > 0:
+            # Va chạm từ trên
+            sprite.rect.y = old_pos.y - 1
+            sprite.velocity.y = 0
+            sprite.velocity.x *= 0.8
+        if 30 < obstacle.rect.bottom - sprite.rect.top < 45 and sprite.velocity.y < 0:
+            # Va chạm từ dưới
+            sprite.velocity.y = 0 
+            sprite.velocity.x *= 0.8
+            sprite.rect.y = old_pos.y + 1
+def handle_collision_large(sprite, obstacle):
     if sprite.rect.colliderect(obstacle.rect):
         old_pos = sprite.rect
         # Kiểm tra va chạm từ các hướng
@@ -102,7 +132,7 @@ def handle_collision(sprite, obstacle):
             sprite.velocity.y *= 0.8
         if 30 < obstacle.rect.right  -  sprite.rect.left < 45 and sprite.velocity.x < 0:
             # Va chạm từ bên phải
-            sprite.rect.x = old_pos.x
+            sprite.rect.x = old_pos.x + 1
             sprite.velocity.x = 0
             sprite.velocity.y *= 0.8
         if  90 < sprite.rect.bottom - obstacle.rect.top < 105 and sprite.velocity.y > 0:
@@ -112,9 +142,9 @@ def handle_collision(sprite, obstacle):
             sprite.velocity.x *= 0.8
         if 30 < obstacle.rect.bottom - sprite.rect.top < 45 and sprite.velocity.y < 0:
             # Va chạm từ dưới
-            sprite.velocity.y = 0
+            sprite.velocity.y = 0 
             sprite.velocity.x *= 0.8
-            sprite.rect.y = old_pos.y
+            sprite.rect.y = old_pos.y + 1
 # Lớp Player với animation
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -507,6 +537,7 @@ def custom_collide_shrunken_mask(sprite1, sprite2):
 class Obstacle(pygame.sprite.Sprite):
     def __init__(self,x_pos, y_pos, image_path, width, height,x_offset, y_offset):
         super().__init__()
+        self.image_path = image_path
         self.image = pygame.image.load(image_path).convert_alpha()
         self.rect = self.image.get_rect()
         self.rect.center = (x_pos, y_pos)
@@ -715,7 +746,7 @@ def run_game(level_file):
         obstacles.add(Obstacle(*obstacle))
         # print(*obstacle)
     
-    all_sprites = pygame.sprite.Group(player, targets, obstacles)
+    all_sprites = pygame.sprite.Group(targets, obstacles, player)
 
     # Vòng lặp game
     clock = pygame.time.Clock()
