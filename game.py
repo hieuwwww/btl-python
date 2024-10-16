@@ -25,7 +25,8 @@ num_segments = 30
 # Màu sắc
 WHITE = (255, 255, 255)
 BLUE = (82, 210, 238, 153)  # độ mờ 60%
-
+GRAY = (128, 128, 128)
+BLACK = (0, 0, 0)
 
 # Hàm tính khoảng cách
 def distance(pos1, pos2):
@@ -553,6 +554,44 @@ def load_level(filename):
         return json.load(f)
     
 
+#Lớp ScoreBar
+
+class ScoreBar:
+    def __init__(self, pos:tuple, size: tuple, star_requirement: tuple, target_count: int) -> None:
+        self.pos = pos
+        self.size = size # chiều rộng theo trục Ox/ chiều dài theo trục Oy
+        self.container_rect = pygame.Rect(pos, size)
+        self.star_requirement= star_requirement
+        self.target_count = target_count
+
+
+    def draw(self, current_targer_count):
+        x = self.pos[0]
+        y = self.pos[1]
+        # Vẽ 
+        pygame.draw.rect(screen, GRAY, self.container_rect)
+        not_glowing_star_img = pygame.image.load("assets/not_glowing_star.png").convert_alpha()
+        glowing_star_img = pygame.image.load("assets/glowing_star.png").convert_alpha()
+    
+        # Khoảng cách giữa lề trên của thanh rìa ngoài và thanh hiển thị điểm bên trong
+        left_margin = 5
+
+        # Tính độ dài thanh hiển thị điểm và vẽ nó
+        target_count_bar = pygame.Rect((x, y + left_margin), (self.size[0] * current_targer_count/ self.target_count, self.size[1] - left_margin * 2))
+        pygame.draw.rect(screen, WHITE, target_count_bar)
+
+        # Vẽ các đường phân mức cho từng mức sao
+        for target_count_requirement in self.star_requirement:
+            # Vị trí của đường phân mức
+            x_new = x + self.size[0] * target_count_requirement / self.target_count
+            indicate_line = pygame.Rect((x_new, y), (1, self.size[1]))
+            pygame.draw.rect(screen, BLACK, indicate_line)
+            # Vẽ ngôi sao tương ứng với mức điểm
+            if current_targer_count >= target_count_requirement:
+                screen.blit(glowing_star_img, (x_new - glowing_star_img.get_width() // 2, y - glowing_star_img.get_height() // 2))
+            else:
+                screen.blit(not_glowing_star_img, (x_new - not_glowing_star_img.get_width() // 2, y - not_glowing_star_img.get_height() // 2))
+
 #Lớp Slider
 BUTTONSTATES = {
     False: "lightgray",  # không hovered
@@ -630,6 +669,9 @@ class Button:
 start_img = pygame.image.load("assets/start_button.png").convert_alpha()
 exit_img = pygame.image.load("assets/exit_button.png").convert_alpha()
 def start_screen():
+
+    pygame.mixer.music.load("assets/main_menu.mp3")
+    pygame.mixer.music.play(-1)
     start_button = Button(100, 200, start_img, 0.5)
     exit_button = Button(300, 200, exit_img, 0.5)
     
@@ -644,6 +686,7 @@ def start_screen():
             else :
                 # Vẽ nút và kiểm tra xem có nhấn nút nào không
                 if start_button.draw(screen):
+                    pygame.mixer.music.stop()
                     # Gọi hàm bắt đầu game khi nhấn nút Start
                     running = False
                     run_game('level1.json')
@@ -702,23 +745,65 @@ def options_screen():
 
 #Chạy màn hình khi kết thúc level/ game
 retry_img = pygame.image.load('assets/retry_button.png')
-def game_over_screen():
+next_level_img = pygame.image.load('assets/next_level_button.png')
+def game_over_screen(actived_target, star_requirement, level_file, current_level):
     running = True
     retry_button = Button(100, 300, retry_img, 0.5)
-    to_main_menu_button = Button(400, 300, to_main_menu_img, 0.5)
+    to_main_menu_button = Button(600, 300, to_main_menu_img, 0.5)
+    next_level_button = Button(300, 300, next_level_img, 1)
     screen.fill(WHITE)
-    print("Initiate game over menu")
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-        if retry_button.draw(screen): # Chơi lại level
-            print("Try again")
-            return run_game('level1.json')
-        if to_main_menu_button.draw(screen):
-            print("Not Try again")
-            return start_screen() # Quay về màn hình chính
-        pygame.display.update()
+
+    if actived_target < star_requirement[0]:
+
+        # Chơi nhạc khi thua level
+        pygame.mixer.music.load("assets/game_over.mp3")
+        pygame.mixer.music.play()
+
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+            if retry_button.draw(screen): # Chơi lại level
+                print("Try again")
+                return run_game(level_file)
+            if to_main_menu_button.draw(screen):
+                print("Not Try again")
+                return start_screen() # Quay về màn hình chính
+            pygame.display.update()
+    else:
+        # Chơi nhạc khi hoàn thành level
+        pygame.mixer.music.load("assets/level_complete.mp3")
+        pygame.mixer.music.play()
+
+        not_glowing_star_img = pygame.image.load("assets/not_glowing_star.png").convert_alpha()
+        glowing_star_img = pygame.image.load("assets/glowing_star.png").convert_alpha()
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+            # Vị trí bắt đầu của ảnh ngôi sao đầu tiên
+            x = 100
+            y = 100
+            # Khoảng cách giữa các ảnh ngôi sao
+            img_distance = 30 
+            for target_requirement in star_requirement:
+                # Nếu số mục tiêu đạt đủ điều kiện thì hiển thị sao vàng và ngược lại
+                if actived_target >= target_requirement: 
+                    screen.blit(glowing_star_img, (x , y))
+                else:
+                    screen.blit(not_glowing_star_img, (x, y))
+                # Tăng khoảng cách giữa các ảnh
+                x += glowing_star_img.get_width() + img_distance
+            if retry_button.draw(screen): # Chơi lại level
+                print("Try again")
+                return run_game(level_file)
+            if to_main_menu_button.draw(screen):
+                print("Not Try again")
+                return start_screen() # Quay về màn hình chính
+            if next_level_button.draw(screen):
+                print("Next Level")
+                return run_game("level" + str(current_level + 1) + ".json")
+            pygame.display.update()
 
 # Hàm chính để chạy game
 pause_img = pygame.image.load('assets/pause_button.png')
@@ -726,7 +811,6 @@ def run_game(level_file):
     # Tạo đối tượng
     player = Player()
     targets = pygame.sprite.Group()
-
     obstacles = pygame.sprite.Group()
     camera = Camera()
     options_button = Button(700, 20, pause_img, 0.5)  # Ví dụ: dùng hình ảnh của nút Exit
@@ -747,10 +831,15 @@ def run_game(level_file):
         # print(*obstacle)
     
     all_sprites = pygame.sprite.Group(targets, obstacles, player)
+    score_bar = ScoreBar((30, 30), (200, 50), level_data['star_requirement'], len(targets))
 
     # Vòng lặp game
     clock = pygame.time.Clock()
     running = True
+
+    # Chơi và lặp lại nhạc nền trong game liên tục
+    pygame.mixer.music.load("assets/ingame_music.mp3")
+    pygame.mixer.music.play(-1)
     while running:
         screen.fill((0, 0, 0))
         
@@ -764,10 +853,19 @@ def run_game(level_file):
         # Cập nhật vị trí mục tiêu
         targets.update(player, obstacles, camera.offset)
 
+        # Đếm số mục tiêu đã kích hoạt
+        actived_target = 0
+        for target in targets:
+            if target.is_active:
+                actived_target += 1
+
+        # Hiển thị điểm
+        score_bar.draw(actived_target)
+
         # Kiểm tra nếu người chơi va chạm mục tiêu
         if pygame.sprite.spritecollideany(player, targets, custom_collide_shrunken_mask):
             print("You got caught!")
-            return game_over_screen()
+            return game_over_screen(actived_target, level_data['star_requirement'], level_file, level_data['level'])
         if options_button.draw(screen):
             print("Opening Options...")
             options_screen()  # Mở menu Options khi nhấn nút
