@@ -7,8 +7,6 @@ import random
 import math
 import time
 
-import pygame.image
-
 # Khởi tạo Pygame
 pygame.init()
 
@@ -575,7 +573,7 @@ def start_screen():
             print("Start button clicked! Moving to the game...")
             # Gọi hàm bắt đầu game khi nhấn nút Start
             running = False
-            run_game('level1.json')
+
         if exit_button.draw(screen):
             print("Exit button clicked! Exiting game...")
             pygame.quit()
@@ -583,10 +581,6 @@ def start_screen():
 
         # Cập nhật màn hình
         pygame.display.update()
-
-#Chạy màn hình pause game
-to_main_menu_img = pygame.image.load('assets/to_main_menu_button.png').convert_alpha()
-resume_img = pygame.image.load('assets/resume_button.png').convert_alpha()
 def options_screen():
     running = True
     volume_slider = Slider((400, 100), (300, 20), 0.5, 0, 1)  # Tạo slider âm lượng một lần tại đây
@@ -618,48 +612,23 @@ def options_screen():
 
         volume_slider.render(screen)
         # Nút để quay lại menu chính
-        back_button = Button(400, 200, to_main_menu_img, 0.5)
+        back_button = Button(100, 200, start_img, 0.5)  # Dùng hình ảnh của nút Start làm ví dụ
         if back_button.draw(screen):
             print("Returning to Main Menu...")
-            start_screen()
             running = False  # Quay lại màn hình chính
-        # Nút quay lại game
-        resume_button = Button(100, 200, resume_img, 0.5)
-        if resume_button.draw(screen):
-            print("Return to game")
-            return
-        pygame.display.update()
 
-#Chạy màn hình khi kết thúc level/ game
-retry_img = pygame.image.load('assets/retry_button.png')
-def game_over_screen():
-    running = True
-    retry_button = Button(100, 300, retry_img, 0.5)
-    to_main_menu_button = Button(400, 300, to_main_menu_img, 0.5)
-    screen.fill(WHITE)
-    print("Initiate game over menu")
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-        if retry_button.draw(screen): # Chơi lại level
-            print("Try again")
-            return run_game('level1.json')
-        if to_main_menu_button.draw(screen):
-            print("Not Try again")
-            return start_screen() # Quay về màn hình chính
         pygame.display.update()
-
+            
 # Hàm chính để chạy game
-pause_img = pygame.image.load('assets/pause_button.png')
 def run_game(level_file):
     # Tạo đối tượng
+    start_screen()
     player = Player()
     targets = pygame.sprite.Group()
 
     obstacles = pygame.sprite.Group()
     camera = Camera()
-    options_button = Button(700, 20, pause_img, 0.5)  # Ví dụ: dùng hình ảnh của nút Exit
+    options_button = Button(700, 20, exit_img, 0.5)  # Ví dụ: dùng hình ảnh của nút Exit
     
     # Tải level
     level_data = load_level(level_file)
@@ -696,7 +665,7 @@ def run_game(level_file):
         # Kiểm tra nếu người chơi va chạm mục tiêu
         if pygame.sprite.spritecollideany(player, targets, custom_collide_shrunken_mask):
             print("You got caught!")
-            return game_over_screen()
+            running = False
         if options_button.draw(screen):
             print("Opening Options...")
             options_screen()  # Mở menu Options khi nhấn nút
@@ -717,5 +686,4 @@ def run_game(level_file):
 
 
 if __name__ == '__main__':
-    start_screen()
-    #run_game('level1.json')
+    run_game('level1.json')
