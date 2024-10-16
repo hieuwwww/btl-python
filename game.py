@@ -7,6 +7,8 @@ import random
 import math
 import time
 
+import pygame.image
+
 # Khởi tạo Pygame
 pygame.init()
 
@@ -23,7 +25,8 @@ num_segments = 30
 # Màu sắc
 WHITE = (255, 255, 255)
 BLUE = (82, 210, 238, 153)  # độ mờ 60%
-
+GRAY = (128, 128, 128)
+BLACK = (0, 0, 0)
 
 # Hàm tính khoảng cách
 def distance(pos1, pos2):
@@ -33,17 +36,6 @@ def distance(pos1, pos2):
 # Tải hình ảnh tạm thời
 background_img = pygame.image.load('assets/background.png')
 MAP_WIDTH, MAP_HEIGHT = background_img.get_width(), background_img.get_height()
-
-dog_img = pygame.image.load('assets/dog.png').convert_alpha()
-dog_img = pygame.transform.scale(dog_img, (50, 50))
-target_img = pygame.image.load('assets/target.png').convert_alpha()
-target_img = pygame.transform.scale(target_img, (40, 40))
-patrol_target_img = pygame.image.load('assets/patrol_target.png').convert_alpha()
-patrol_target_img = pygame.transform.scale(patrol_target_img, (40, 40))
-distracted_target_img = pygame.image.load('assets/distracted_target.png').convert_alpha()
-distracted_target_img = pygame.transform.scale(distracted_target_img, (40, 40))
-obstacle_img = pygame.image.load('assets/obstacle.png').convert_alpha()
-obstacle_img = pygame.transform.scale(obstacle_img, (120, 120))
 
 
 # Lớp Camera
@@ -75,10 +67,7 @@ def move_entity(entity, direction_vector, velocity, acceleration, max_speed, obs
     # Giới hạn tốc độ tối đa
     if velocity.length() > max_speed:
         velocity.scale_to_length(max_speed)
-
-    # Lưu vị trí cũ
     old_position = entity.rect.topleft
-
     # Cập nhật vị trí theo vận tốc
     entity.rect.x += velocity.x
     entity.rect.y += velocity.y
@@ -94,14 +83,69 @@ def move_entity(entity, direction_vector, velocity, acceleration, max_speed, obs
         entity.rect.bottom = MAP_HEIGHT
 
     # Kiểm tra va chạm với chướng ngại vật
-    if collide_with_obstacles(entity, obstacles):
-        entity.rect.topleft = old_position  # Quay về vị trí cũ nếu có va chạm
+    for obstacle in obstacles:
+        if collide_with_obstacle(entity, obstacle):
+            obstacle.image.set_alpha(128)
+            if obstacle.image_path == 'assets/stone.png':
+                handle_collision_small(entity, obstacle)
+            else:
+                handle_collision_large(entity, obstacle)
+        else:
+            obstacle.image.set_alpha(255)
 
     return velocity  # Trả về vận tốc mới để tiếp tục cập nhật trong lần sau
 #Thu gọn mask để va chạm mượt hơn
 def shrink_mask(mask):
     return mask.scale((mask.get_size()[0] - 5, mask.get_size()[1] - 5))
-
+# Pseudocode for handling smooth sliding collisions
+def handle_collision_small(sprite, obstacle):
+    if sprite.rect.colliderect(obstacle.rect):
+        old_pos = sprite.rect
+        # Kiểm tra va chạm từ các hướng
+        if 10 < sprite.rect.right - obstacle.rect.left  < 25 and sprite.velocity.x > 0:
+            # Va chạm từ bên trái
+            sprite.rect.x = old_pos.x - 1  # Đặt lại vị trí để không đi xuyên qua
+            sprite.velocity.x = 0
+            sprite.velocity.y *= 0.8
+        if 10 < obstacle.rect.right  -  sprite.rect.left < 25 and sprite.velocity.x < 0:
+            # Va chạm từ bên phải
+            sprite.rect.x = old_pos.x + 1
+            sprite.velocity.x = 0
+            sprite.velocity.y *= 0.8
+        if  10 < sprite.rect.bottom - obstacle.rect.top < 25 and sprite.velocity.y > 0:
+            # Va chạm từ trên
+            sprite.rect.y = old_pos.y - 1
+            sprite.velocity.y = 0
+            sprite.velocity.x *= 0.8
+        if 30 < obstacle.rect.bottom - sprite.rect.top < 45 and sprite.velocity.y < 0:
+            # Va chạm từ dưới
+            sprite.velocity.y = 0 
+            sprite.velocity.x *= 0.8
+            sprite.rect.y = old_pos.y + 1
+def handle_collision_large(sprite, obstacle):
+    if sprite.rect.colliderect(obstacle.rect):
+        old_pos = sprite.rect
+        # Kiểm tra va chạm từ các hướng
+        if 40 < sprite.rect.right - obstacle.rect.left  < 50 and sprite.velocity.x > 0:
+            # Va chạm từ bên trái
+            sprite.rect.x = old_pos.x - 1  # Đặt lại vị trí để không đi xuyên qua
+            sprite.velocity.x = 0
+            sprite.velocity.y *= 0.8
+        if 30 < obstacle.rect.right  -  sprite.rect.left < 45 and sprite.velocity.x < 0:
+            # Va chạm từ bên phải
+            sprite.rect.x = old_pos.x + 1
+            sprite.velocity.x = 0
+            sprite.velocity.y *= 0.8
+        if  90 < sprite.rect.bottom - obstacle.rect.top < 105 and sprite.velocity.y > 0:
+            # Va chạm từ trên
+            sprite.rect.y = old_pos.y - 1
+            sprite.velocity.y = 0
+            sprite.velocity.x *= 0.8
+        if 30 < obstacle.rect.bottom - sprite.rect.top < 45 and sprite.velocity.y < 0:
+            # Va chạm từ dưới
+            sprite.velocity.y = 0 
+            sprite.velocity.x *= 0.8
+            sprite.rect.y = old_pos.y + 1
 # Lớp Player với animation
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -114,6 +158,8 @@ class Player(pygame.sprite.Sprite):
         self.image = self.idle_images[self.current_frame]
         self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect()
+        self.rect.x -= 5
+        self.rect.y -= 5
         self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 
         self.speed = 5
@@ -186,7 +232,7 @@ class Player(pygame.sprite.Sprite):
 
 # Lớp đối tượng Target (mục tiêu đuổi theo)
 class Target(pygame.sprite.Sprite):
-    def __init__(self, x, y, image):
+    def __init__(self, x, y):
         super().__init__()
         # Thêm hình ảnh animation idle và moving
         self.idle_images = [pygame.transform.scale(pygame.image.load(f'assets/target_move/target_idle_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
@@ -293,8 +339,8 @@ class Target(pygame.sprite.Sprite):
 
 # Target đi tuần tra khu vực
 class PatrollingTarget(Target):
-    def __init__(self, x, y, image, patrol_points):
-        super().__init__(x, y, image)
+    def __init__(self, x, y, patrol_points):
+        super().__init__(x, y )
         self.run_images = [pygame.transform.scale(pygame.image.load(f'assets/patrolling_move/patrolling_{i}.png').convert_alpha(), (60, 70)) for i in range(4)]
         self.animation_speed = 100
         self.current_frame = 0
@@ -355,8 +401,8 @@ class PatrollingTarget(Target):
                 self.run_images = [pygame.transform.flip(move_image, True, False) for move_image in self.run_images]
 
 class DistractedTarget(Target):
-    def __init__(self, x, y, image):
-        super().__init__(x, y, image)
+    def __init__(self, x, y):
+        super().__init__(x, y)
         # them anh animation idle, move, stop
         self.idle_image = [pygame.transform.scale(pygame.image.load(f'assets/distracted_move/distracted_idle_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
         self.move_image = [pygame.transform.scale(pygame.image.load(f'assets/distracted_move/distracted_move_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
@@ -446,11 +492,37 @@ class DistractedTarget(Target):
         if time.time() - self.last_activation > self.attention_span:
             self.is_active = False
 
+def create_custom_mask(sprite, x, y, offset_x=0, offset_y=0):
+    """Tạo một mask hình vuông nhỏ hơn ở giữa sprite."""
+    # Tạo một surface tạm thời để vẽ hình vuông
+    square_surface = pygame.Surface((x, y), pygame.SRCALPHA)
+    square_surface.fill((255, 255, 255))  # Màu trắng cho vùng hitbox
 
-def collide_with_obstacles(sprites, obstacles):  # Va chạm vật thể
-    if pygame.sprite.spritecollideany(sprites, obstacles) and pygame.sprite.spritecollideany(sprites, obstacles, pygame.sprite.collide_mask):
-        return True
-    return False
+    # Tạo một mask từ surface này
+    square_mask = pygame.mask.from_surface(square_surface)
+
+    # Cập nhật vị trí của mask dựa trên offset
+    square_rect = square_surface.get_rect(center=sprite.rect.topleft)
+    square_rect.y += offset_y
+    square_rect.x += offset_x
+
+    return square_mask, square_rect
+
+def collide_with_obstacle(sprite, obstacle):
+    # Tạo mask hình vuông nhỏ hơn cho obstacle
+    obstacle_mask, obstacle_rect = create_custom_mask(obstacle, obstacle.width, obstacle.height, obstacle.x_offset, obstacle.y_offset)
+    
+    # Lấy mask và vị trí của sprite
+    sprite_mask = pygame.mask.from_surface(sprite.image)
+    sprite_rect = sprite.rect
+    
+    # Tính toán offset giữa sprite và obstacle để kiểm tra overlap
+    offset = (obstacle_rect.left - sprite_rect.left, obstacle_rect.top - sprite_rect.top)
+
+    # Kiểm tra va chạm giữa sprite mask và obstacle mask nhỏ hơn
+    if sprite_mask.overlap(obstacle_mask, offset):
+        return True  # Có va chạm
+    return False  # Không có va chạm
 
 def custom_collide_shrunken_mask(sprite1, sprite2):
     # Shrink mask của sprite1 và sprite2
@@ -464,11 +536,16 @@ def custom_collide_shrunken_mask(sprite1, sprite2):
     return mask1.overlap(mask2, offset) is not None
 # Lớp Obstacle (chướng ngại vật)
 class Obstacle(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self,x_pos, y_pos, image_path, width, height,x_offset, y_offset):
         super().__init__()
-        self.image = obstacle_img
+        self.image_path = image_path
+        self.image = pygame.image.load(image_path).convert_alpha()
         self.rect = self.image.get_rect()
-        self.rect.center = (x, y)
+        self.rect.center = (x_pos, y_pos)
+        self.x_offset = x_offset
+        self.y_offset = y_offset
+        self.width = width
+        self.height = height
 
 
 # Hàm tải level từ file JSON
@@ -476,6 +553,44 @@ def load_level(filename):
     with open(os.path.join('levels', filename), 'r') as f:
         return json.load(f)
     
+
+#Lớp ScoreBar
+
+class ScoreBar:
+    def __init__(self, pos:tuple, size: tuple, star_requirement: tuple, target_count: int) -> None:
+        self.pos = pos
+        self.size = size # chiều rộng theo trục Ox/ chiều dài theo trục Oy
+        self.container_rect = pygame.Rect(pos, size)
+        self.star_requirement= star_requirement
+        self.target_count = target_count
+
+
+    def draw(self, current_targer_count):
+        x = self.pos[0]
+        y = self.pos[1]
+        # Vẽ 
+        pygame.draw.rect(screen, GRAY, self.container_rect)
+        not_glowing_star_img = pygame.image.load("assets/not_glowing_star.png").convert_alpha()
+        glowing_star_img = pygame.image.load("assets/glowing_star.png").convert_alpha()
+    
+        # Khoảng cách giữa lề trên của thanh rìa ngoài và thanh hiển thị điểm bên trong
+        left_margin = 5
+
+        # Tính độ dài thanh hiển thị điểm và vẽ nó
+        target_count_bar = pygame.Rect((x, y + left_margin), (self.size[0] * current_targer_count/ self.target_count, self.size[1] - left_margin * 2))
+        pygame.draw.rect(screen, WHITE, target_count_bar)
+
+        # Vẽ các đường phân mức cho từng mức sao
+        for target_count_requirement in self.star_requirement:
+            # Vị trí của đường phân mức
+            x_new = x + self.size[0] * target_count_requirement / self.target_count
+            indicate_line = pygame.Rect((x_new, y), (1, self.size[1]))
+            pygame.draw.rect(screen, BLACK, indicate_line)
+            # Vẽ ngôi sao tương ứng với mức điểm
+            if current_targer_count >= target_count_requirement:
+                screen.blit(glowing_star_img, (x_new - glowing_star_img.get_width() // 2, y - glowing_star_img.get_height() // 2))
+            else:
+                screen.blit(not_glowing_star_img, (x_new - not_glowing_star_img.get_width() // 2, y - not_glowing_star_img.get_height() // 2))
 
 #Lớp Slider
 BUTTONSTATES = {
@@ -533,29 +648,30 @@ class Button:
         self.clicked = False  # Thêm biến này để theo dõi trạng thái nhấn
     
     def draw(self, cur_screen):
-        # Lấy vị trí chuột hiện tại
-        pos = pygame.mouse.get_pos()
-        action = False  # Biến để xác định có nhấn hay không
+        try:
+            pos = pygame.mouse.get_pos()
+            action = False
 
-        # Kiểm tra nếu con trỏ chuột đang nằm trên nút
-        if self.rect.collidepoint(pos):
-            # Kiểm tra nếu nhấn chuột trái
-            if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
-                self.clicked = True  # Cập nhật trạng thái là đã nhấn
-                action = True  # Xác định đã có hành động nhấn
-                print("Button clicked!")
-            # Kiểm tra nếu chuột không còn nhấn
-            if pygame.mouse.get_pressed()[0] == 0:
-                self.clicked = False  # Reset trạng thái để cho phép nhấn tiếp
-        
-        # Vẽ nút lên màn hình
-        cur_screen.blit(self.image, (self.rect.x, self.rect.y))
-        
-        return action  # Trả về True nếu nút được nhấn
+            if self.rect.collidepoint(pos):
+                if pygame.mouse.get_pressed()[0] == 1 and not self.clicked:
+                    self.clicked = True
+                    action = True
+                    print("Button clicked!")
+                if pygame.mouse.get_pressed()[0] == 0:
+                    self.clicked = False
+
+            cur_screen.blit(self.image, (self.rect.x, self.rect.y))
+            return action
+
+        except Exception as e:
+            return False
 # Chạy màn hình bắt đầu
 start_img = pygame.image.load("assets/start_button.png").convert_alpha()
 exit_img = pygame.image.load("assets/exit_button.png").convert_alpha()
 def start_screen():
+
+    pygame.mixer.music.load("assets/main_menu.mp3")
+    pygame.mixer.music.play(-1)
     start_button = Button(100, 200, start_img, 0.5)
     exit_button = Button(300, 200, exit_img, 0.5)
     
@@ -567,20 +683,23 @@ def start_screen():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            else :
+                # Vẽ nút và kiểm tra xem có nhấn nút nào không
+                if start_button.draw(screen):
+                    pygame.mixer.music.stop()
+                    # Gọi hàm bắt đầu game khi nhấn nút Start
+                    running = False
+                    run_game('level1.json')
+                if exit_button.draw(screen):
+                    pygame.quit()
+                    exit()  # Thoát chương trình khi nhấn nút Exit
 
-        # Vẽ nút và kiểm tra xem có nhấn nút nào không
-        if start_button.draw(screen):
-            print("Start button clicked! Moving to the game...")
-            # Gọi hàm bắt đầu game khi nhấn nút Start
-            running = False
-
-        if exit_button.draw(screen):
-            print("Exit button clicked! Exiting game...")
-            pygame.quit()
-            exit()  # Thoát chương trình khi nhấn nút Exit
-
-        # Cập nhật màn hình
+                # Cập nhật màn hình
         pygame.display.update()
+
+#Chạy màn hình pause game
+to_main_menu_img = pygame.image.load('assets/to_main_menu_button.png').convert_alpha()
+resume_img = pygame.image.load('assets/resume_button.png').convert_alpha()
 def options_screen():
     running = True
     volume_slider = Slider((400, 100), (300, 20), 0.5, 0, 1)  # Tạo slider âm lượng một lần tại đây
@@ -612,23 +731,89 @@ def options_screen():
 
         volume_slider.render(screen)
         # Nút để quay lại menu chính
-        back_button = Button(100, 200, start_img, 0.5)  # Dùng hình ảnh của nút Start làm ví dụ
+        back_button = Button(400, 200, to_main_menu_img, 0.5)
         if back_button.draw(screen):
             print("Returning to Main Menu...")
+            start_screen()
             running = False  # Quay lại màn hình chính
-
+        # Nút quay lại game
+        resume_button = Button(100, 200, resume_img, 0.5)
+        if resume_button.draw(screen):
+            print("Return to game")
+            return
         pygame.display.update()
-            
+
+#Chạy màn hình khi kết thúc level/ game
+retry_img = pygame.image.load('assets/retry_button.png')
+next_level_img = pygame.image.load('assets/next_level_button.png')
+def game_over_screen(actived_target, star_requirement, level_file, current_level):
+    running = True
+    retry_button = Button(100, 300, retry_img, 0.5)
+    to_main_menu_button = Button(600, 300, to_main_menu_img, 0.5)
+    next_level_button = Button(300, 300, next_level_img, 1)
+    screen.fill(WHITE)
+
+    if actived_target < star_requirement[0]:
+
+        # Chơi nhạc khi thua level
+        pygame.mixer.music.load("assets/game_over.mp3")
+        pygame.mixer.music.play()
+
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+            if retry_button.draw(screen): # Chơi lại level
+                print("Try again")
+                return run_game(level_file)
+            if to_main_menu_button.draw(screen):
+                print("Not Try again")
+                return start_screen() # Quay về màn hình chính
+            pygame.display.update()
+    else:
+        # Chơi nhạc khi hoàn thành level
+        pygame.mixer.music.load("assets/level_complete.mp3")
+        pygame.mixer.music.play()
+
+        not_glowing_star_img = pygame.image.load("assets/not_glowing_star.png").convert_alpha()
+        glowing_star_img = pygame.image.load("assets/glowing_star.png").convert_alpha()
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+            # Vị trí bắt đầu của ảnh ngôi sao đầu tiên
+            x = 100
+            y = 100
+            # Khoảng cách giữa các ảnh ngôi sao
+            img_distance = 30 
+            for target_requirement in star_requirement:
+                # Nếu số mục tiêu đạt đủ điều kiện thì hiển thị sao vàng và ngược lại
+                if actived_target >= target_requirement: 
+                    screen.blit(glowing_star_img, (x , y))
+                else:
+                    screen.blit(not_glowing_star_img, (x, y))
+                # Tăng khoảng cách giữa các ảnh
+                x += glowing_star_img.get_width() + img_distance
+            if retry_button.draw(screen): # Chơi lại level
+                print("Try again")
+                return run_game(level_file)
+            if to_main_menu_button.draw(screen):
+                print("Not Try again")
+                return start_screen() # Quay về màn hình chính
+            if next_level_button.draw(screen):
+                print("Next Level")
+                return run_game("level" + str(current_level + 1) + ".json")
+            pygame.display.update()
+
 # Hàm chính để chạy game
+pause_img = pygame.image.load('assets/pause_button.png')
 def run_game(level_file):
     # Tạo đối tượng
-    start_screen()
     player = Player()
     targets = pygame.sprite.Group()
-
     obstacles = pygame.sprite.Group()
     camera = Camera()
-    options_button = Button(700, 20, exit_img, 0.5)  # Ví dụ: dùng hình ảnh của nút Exit
+    options_button = Button(700, 20, pause_img, 0.5)  # Ví dụ: dùng hình ảnh của nút Exit
     
     # Tải level
     level_data = load_level(level_file)
@@ -636,19 +821,25 @@ def run_game(level_file):
         x = target_pos[0]
         y = target_pos[1]
         if target_pos[2] == 's':
-            targets.add(Target(x, y, target_img))
+            targets.add(Target(x, y))
         elif target_pos[2] == 'p':
-            targets.add(PatrollingTarget(x, y, patrol_target_img, [[x + 50, y], [x - 50, y], [x, y - 50]]))
+            targets.add(PatrollingTarget(x, y,  [[x + 50, y], [x - 50, y], [x, y - 50]]))
         elif target_pos[2] == 'd':
-            targets.add(DistractedTarget(x, y, distracted_target_img))
-    for obstacle_pos in level_data['obstacles']:
-        obstacles.add(Obstacle(*obstacle_pos))
-
-    all_sprites = pygame.sprite.Group(player, targets, obstacles)
+            targets.add(DistractedTarget(x, y ))
+    for obstacle in level_data['obstacles']:
+        obstacles.add(Obstacle(*obstacle))
+        # print(*obstacle)
+    
+    all_sprites = pygame.sprite.Group(targets, obstacles, player)
+    score_bar = ScoreBar((30, 30), (200, 50), level_data['star_requirement'], len(targets))
 
     # Vòng lặp game
     clock = pygame.time.Clock()
     running = True
+
+    # Chơi và lặp lại nhạc nền trong game liên tục
+    pygame.mixer.music.load("assets/ingame_music.mp3")
+    pygame.mixer.music.play(-1)
     while running:
         screen.fill((0, 0, 0))
         
@@ -662,10 +853,19 @@ def run_game(level_file):
         # Cập nhật vị trí mục tiêu
         targets.update(player, obstacles, camera.offset)
 
+        # Đếm số mục tiêu đã kích hoạt
+        actived_target = 0
+        for target in targets:
+            if target.is_active:
+                actived_target += 1
+
+        # Hiển thị điểm
+        score_bar.draw(actived_target)
+
         # Kiểm tra nếu người chơi va chạm mục tiêu
         if pygame.sprite.spritecollideany(player, targets, custom_collide_shrunken_mask):
             print("You got caught!")
-            running = False
+            return game_over_screen(actived_target, level_data['star_requirement'], level_file, level_data['level'])
         if options_button.draw(screen):
             print("Opening Options...")
             options_screen()  # Mở menu Options khi nhấn nút
@@ -686,4 +886,5 @@ def run_game(level_file):
 
 
 if __name__ == '__main__':
+    start_screen()
     run_game('level1.json')
