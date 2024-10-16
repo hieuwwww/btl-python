@@ -151,8 +151,8 @@ class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
         # Tải hình ảnh cho các trạng thái
-        self.idle_images = [pygame.transform.scale(pygame.image.load(f'assets/move/player_idle_{i}.png').convert_alpha(), (65, 53)) for i in range(4)]  # 4 frame idle
-        self.moving_images = [pygame.transform.scale(pygame.image.load(f'assets/move/player_move_{i}.png').convert_alpha(), (65, 53)) for i in range(4)]  # 4 frame moving
+        self.idle_images = [pygame.transform.scale(pygame.image.load(f'assets/move/player_idle_{i}.png').convert_alpha(), (65, 53)) for i in range(4)]  # 6 frame idle
+        self.moving_images = [pygame.transform.scale(pygame.image.load(f'assets/move/player_move_{i}.png').convert_alpha(), (65, 53)) for i in range(6)]  # 6 frame moving
         self.current_frame = 0
         self.animation_speed = 0.1
         self.image = self.idle_images[self.current_frame]
@@ -236,14 +236,14 @@ class Target(pygame.sprite.Sprite):
         super().__init__()
         # Thêm hình ảnh animation idle và moving
         self.idle_images = [pygame.transform.scale(pygame.image.load(f'assets/target_move/target_idle_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
-        self.moving_images = [pygame.transform.scale(pygame.image.load(f'assets/target_move/target_move_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
+        self.moving_images = [pygame.transform.scale(pygame.image.load(f'assets/target_move/target_move_{i}.png').convert_alpha(), (50, 65)) for i in range(6)]
 
         self.current_frame = 0
         self.animation_speed = 0.1
         self.image = self.idle_images[self.current_frame]  # Bắt đầu với trạng thái idle
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
-        self.max_speed = 2  # mục tiêu di chuyển chậm hơn mục tiêu
+        self.max_speed = 3  # mục tiêu di chuyển chậm hơn mục tiêu
         self.acceleration = 0.2
         self.velocity = pygame.Vector2(0, 0)
         self.is_active = False
@@ -341,7 +341,7 @@ class Target(pygame.sprite.Sprite):
 class PatrollingTarget(Target):
     def __init__(self, x, y, patrol_points):
         super().__init__(x, y )
-        self.run_images = [pygame.transform.scale(pygame.image.load(f'assets/patrolling_move/patrolling_{i}.png').convert_alpha(), (60, 70)) for i in range(4)]
+        self.run_images = [pygame.transform.scale(pygame.image.load(f'assets/patrolling_move/patrolling_{i}.png').convert_alpha(), (60, 70)) for i in range(6)]
         self.animation_speed = 100
         self.current_frame = 0
         self.last_update = 0
@@ -405,7 +405,7 @@ class DistractedTarget(Target):
         super().__init__(x, y)
         # them anh animation idle, move, stop
         self.idle_image = [pygame.transform.scale(pygame.image.load(f'assets/distracted_move/distracted_idle_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
-        self.move_image = [pygame.transform.scale(pygame.image.load(f'assets/distracted_move/distracted_move_{i}.png').convert_alpha(), (50, 65)) for i in range(4)]
+        self.move_image = [pygame.transform.scale(pygame.image.load(f'assets/distracted_move/distracted_move_{i}.png').convert_alpha(), (50, 65)) for i in range(6)]
         self.stop_image = [pygame.transform.scale(pygame.image.load(f'assets/distracted_move/distracted_stop_{i}.png').convert_alpha(), (50, 65)) for i in range(3)]
 
         self.current_frame = 0
