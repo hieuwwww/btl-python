@@ -740,10 +740,11 @@ def start_screen():
             else:
                 # Vẽ nút và kiểm tra xem có nhấn nút nào không
                 if start_button.draw(screen):
-                    pygame.mixer.music.stop()
+                    #pygame.mixer.music.stop()
                     # Gọi hàm bắt đầu game khi nhấn nút Start
                     running = False
-                    run_game('level1.json')
+                    time.sleep(0.1)
+                    choose_level_menu()
                 if exit_button.draw(screen):
                     pygame.quit()
                     exit()  # Thoát chương trình khi nhấn nút Exit
@@ -787,6 +788,7 @@ def options_screen():
             volume_slider.unhover()
 
         volume_slider.render(screen)
+        pygame.mixer.music.set_volume(volume_slider.get_value())
         # Nút để quay lại menu chính
         back_button = Button(450, 250, to_main_menu_img, 0.7)
         if back_button.draw(screen):
@@ -832,6 +834,7 @@ def game_over_screen(actived_target, star_requirement, level_file, current_level
                 return run_game(level_file)
             if to_main_menu_button.draw(screen):
                 print("Not Try again")
+                time.sleep(0.2)
                 return start_screen()  # Quay về màn hình chính
             pygame.display.update()
     else:
@@ -882,9 +885,10 @@ def run_game(level_file):
     obstacles = pygame.sprite.Group()
     camera = Camera()
     options_button = Button(700, 20, pause_img, 0.5)  # Ví dụ: dùng hình ảnh của nút Exit
-
     # Tải level
     level_data = load_level(level_file)
+    player.rect.x = level_data['player'][0]
+    player.rect.y = level_data['player'][1]
     for target_pos in level_data['targets']:
         x = target_pos[0]
         y = target_pos[1]
@@ -907,6 +911,7 @@ def run_game(level_file):
 
     # Chơi và lặp lại nhạc nền trong game liên tục
     pygame.mixer.music.load("assets/ingame_music.mp3")
+    pygame.mixer.music.set_volume(0.5)
     pygame.mixer.music.play(-1)
     while running:
         screen.fill((0, 0, 0))
@@ -926,12 +931,11 @@ def run_game(level_file):
         for target in targets:
             if target.is_active:
                 actived_target += 1
-
         # Hiển thị điểm
         score_bar.draw(actived_target)
 
         # Kiểm tra nếu người chơi va chạm mục tiêu
-        if pygame.sprite.spritecollideany(player, targets, custom_collide_shrunken_mask):
+        if actived_target == level_data['star_requirement'][2] or pygame.sprite.spritecollideany(player, targets, custom_collide_shrunken_mask):
             print("You got caught!")
             return game_over_screen(actived_target, level_data['star_requirement'], level_file, level_data['level'])
         if options_button.draw(screen):
@@ -951,7 +955,24 @@ def run_game(level_file):
 
     pygame.quit()
 
+def choose_level_menu():
+    print("Choosing menu")
+    back_button = Button(450, 250, to_main_menu_img, 0.7)
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+        screen.fill((128, 128, 128))
+        level_list = list()
+        for i in range(0, 9):
+            level_list.append(Button(200 + (i%3)*150, 100 + (i//3)*150,pygame.image.load("assets/button_level" + str(i + 1) + ".png").convert_alpha(), 2))
+        for i in range(0, 9):
+            if level_list[i].draw(screen):
+                print('level' + str(i + 1) + ".json" + " choosen")
+                return run_game('level' + str(i + 1) + ".json")
+        pygame.display.flip()
+    pygame.quit()
 
 if __name__ == '__main__':
     start_screen()
-    run_game('level1.json')
